@@ -1,6 +1,4 @@
 #include <deque>
-#include <iostream>
-#include <ostream>
 #include <raylib.h>
 #include <raymath.h>
 
@@ -9,6 +7,7 @@ Color darkGreen = {43, 51, 24, 255};
 
 int cellSize  = 30;
 int cellCount = 25;
+int offset    = 75;
 
 double lastUpdateTime = 0;
 bool   eventTriggered(double interval)
@@ -44,7 +43,10 @@ public:
     }
     ~Food() { UnloadTexture(texture); }
 
-    void Draw() { DrawTexture(texture, position.x * cellSize, position.y * cellSize, WHITE); }
+    void Draw()
+    {
+        DrawTexture(texture, position.x * cellSize + offset, position.y * cellSize + offset, WHITE);
+    }
 
     Vector2 GenerateRandomCell()
     {
@@ -72,10 +74,10 @@ public:
     void Draw()
     {
         for (unsigned int i = 0; i < body.size(); i++) {
-            float     x = body[i].x;
-            float     y = body[i].y;
-            Rectangle segement =
-                Rectangle{x * cellSize, y * cellSize, float(cellSize), float(cellSize)};
+            float     x        = body[i].x;
+            float     y        = body[i].y;
+            Rectangle segement = Rectangle{
+                x * cellSize + offset, y * cellSize + offset, float(cellSize), float(cellSize)};
             DrawRectangleRounded(segement, 0.5, 6, darkGreen);
         }
     }
@@ -103,6 +105,22 @@ public:
     Snake snake   = Snake();
     Food  food    = Food(snake.body);
     bool  running = true;
+    int   score   = 0;
+    Sound eatSound;
+    Sound wallSound;
+
+    Game()
+    {
+        InitAudioDevice();
+        eatSound  = LoadSound("Sounds/eat.mp3");
+        wallSound = LoadSound("Sounds/wall.mp3");
+    }
+    ~Game()
+    {
+        UnloadSound(eatSound);
+        UnloadSound(wallSound);
+        CloseAudioDevice();
+    }
 
     void Draw()
     {
@@ -115,6 +133,7 @@ public:
             snake.update();
             CheckCollisionWithFood();
             CheckCollisonWithEdges();
+            CheckCollisionWithTail();
         }
     }
 
@@ -123,6 +142,8 @@ public:
         if (Vector2Equals(snake.body[0], food.position)) {
             food.position    = food.GenerateRandomPos(snake.body);
             snake.addSegment = true;
+            score += 1;
+            PlaySound(eatSound);
         }
     }
 
@@ -141,13 +162,23 @@ public:
         snake.Reset();
         food.position = food.GenerateRandomPos(snake.body);
         running       = false;
+        score         = 0;
+        PlaySound(wallSound);
+    }
+    void CheckCollisionWithTail()
+    {
+        std::deque<Vector2> headlessBody = snake.body;
+        headlessBody.pop_front();
+        if (ElementInDeque(snake.body[0], headlessBody)) {
+            GameOver();
+        }
     }
 };
 
 int main()
 {
 
-    InitWindow(cellSize * cellCount, cellSize * cellCount, "Retro Snake");
+    InitWindow(2 * offset + cellSize * cellCount, 2 * offset + cellSize * cellCount, "Retro Snake");
     SetTargetFPS(60);
     Game game = Game();
 
@@ -173,8 +204,20 @@ int main()
             game.snake.direction = {1, 0};
             game.running         = true;
         }
+        DrawText("snake", offset - 5, 20, 40, darkGreen);
+        DrawText(TextFormat("%i", game.score),
+                 offset - 5,
+                 offset + cellSize * cellCount + 10,
+                 40,
+                 darkGreen);
         game.Draw();
         ClearBackground(green);
+        DrawRectangleLinesEx(Rectangle{float(offset - 5),
+                                       float(offset - 5),
+                                       float(cellSize * cellCount + 10),
+                                       float(cellSize * cellCount + 10)},
+                             5,
+                             darkGreen);
         EndDrawing();
     }
     CloseWindow();
